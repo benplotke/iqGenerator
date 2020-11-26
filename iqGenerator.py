@@ -23,8 +23,6 @@
 # 		next from sample
 
 # ToDo
-#  -- add to git
-#  -- change number of matricies printed
 #  -- print user friendly transformation explanations
 #  -- make difficulty logic and selection
 
@@ -220,7 +218,7 @@ class Problem:
 			( MatrixOperations.swapCase, (random.choice(range(self.size)),random.choice(range(self.size))) )
 		]
 		rules = random.sample(rules, ruleCount)
-		for m in range(8):
+		for m in range(3):
 			nextMatrix = copy.deepcopy(self.matricies[-1])
 			for rule in rules:
 				nextMatrix.ApplyOperation(rule[0], rule[1])
@@ -249,8 +247,6 @@ class Problem:
 	def DisplayProblem(self):
 		s = ""
 		s += self._addMatriciesRows(0, 3) + "\n"
-		s += self._addMatriciesRows(3, 6) + "\n"
-		s += self._addMatriciesRows(6, 8)
 		print(s)
 
 	def DisplayOptions(self):
