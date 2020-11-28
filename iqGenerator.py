@@ -23,11 +23,10 @@
 # 		next from sample
 
 # ToDo
-#  -- print user friendly transformation explanations
-#  -- make difficulty logic and selection
-
-
-# matrix of matricies
+#  -- improve rule selection logic
+#  -- Complete domain of existing rules
+#  -- Add remaining rule ideas
+#  -- Add more matrix types
 
 import string
 import random
@@ -71,7 +70,7 @@ class RandomChars:
 		return [RandomChars.RandomCaseSwap(c) for c in selectedChars]
 
 
-class MatrixOperations(Enum):
+class MatrixRules(Enum):
 	rotate = 1
 	zigZagShift = 2
 	horizontalShift = 3
@@ -102,14 +101,14 @@ class CharMatrix:
 			for j in range(size):
 				row.append(next(chars))
 			self.rows.append(row)
-		self.OperationDictionary = {
-			MatrixOperations.rotate : self.Rotate,
-			MatrixOperations.zigZagShift : self.ZigZagShift,
-			MatrixOperations.horizontalShift : self.HorizontalShift,
-			MatrixOperations.verticalShift : self.VerticalShift,
-			MatrixOperations.rowShift : self.RowShift,
-			MatrixOperations.colShift : self.ColShift,
-			MatrixOperations.swapCase : self.SwapCase
+		self.RuleDictionary = {
+			MatrixRules.rotate : self.Rotate,
+			MatrixRules.zigZagShift : self.ZigZagShift,
+			MatrixRules.horizontalShift : self.HorizontalShift,
+			MatrixRules.verticalShift : self.VerticalShift,
+			MatrixRules.rowShift : self.RowShift,
+			MatrixRules.colShift : self.ColShift,
+			MatrixRules.swapCase : self.SwapCase
 		}
 
 	def __iter__(self):
@@ -176,11 +175,11 @@ class CharMatrix:
 		for i in range(self.size):
 			self.rows[i][col] = tmpCol[(i+n)%self.size]
 
-	def SwapCase(self, *cell):
-		self.rows[cell[0]][cell[1]] = self.rows[cell[0]][cell[1]].swapcase()
+	def SwapCase(self, row, col):
+		self.rows[row][col] = self.rows[row][col].swapcase()
 
-	def ApplyOperation(self, operation, args):
-		self.OperationDictionary.get(operation)(*args)
+	def ApplyRule(self, rule):
+		self.RuleDictionary[rule.name](*(rule.args))
 
 	def RandomCells(self, count):
 		cells = set()
@@ -196,6 +195,92 @@ class CharMatrix:
 		return s.rstrip('\n')
 
 
+class Rule:
+
+	def __init__(self, name, args, difficulty):
+		self.name = name
+		self.args = args
+		self.difficulty = difficulty
+
+	def __str__(self):
+		NameToDescription = {
+			MatrixRules.rotate : "Rotate by {} degrees",
+			MatrixRules.zigZagShift : "Rows were shifted {} positions in a zig-zag pattern",
+			MatrixRules.horizontalShift : "Matrix was shifted {} positions horizontally",
+			MatrixRules.verticalShift : "Matrix was shifted {} positions vertically",
+			MatrixRules.rowShift : "Row {} was shifted {} positions horizontally (zero indexing)",
+			MatrixRules.colShift : "Column {} was shifted {} positions vertically (zero indexing)",
+			MatrixRules.swapCase : "The case of row {} column {} has been swapped (zero indexing)"
+		}
+		return NameToDescription[self.name].format(*self.args)
+
+	@classmethod
+	def _newRotate(cls, size):
+		return cls(MatrixRules.rotate, (random.choice((90, 180, 270)),), 1)
+
+	@classmethod
+	def _newZigZagShift(cls, size):
+		shift = random.choice(range(1, size**2 -1))
+		difficulty = 3
+		if shift%size == 0:
+			difficulty = 1
+		if shift%size == 1 or shift%size == -1:
+			difficulty = 2
+		return cls(MatrixRules.zigZagShift, (random.choice(range(1, size**2 -1)),), difficulty)
+
+	@classmethod
+	def _newHorizontalShift(cls, size):
+		return cls(MatrixRules.horizontalShift, (random.choice(range(1, size-1)),), 1)
+
+	@classmethod
+	def _newVerticalShift(cls, size):
+		return cls(MatrixRules.verticalShift, (random.choice(range(1, size-1)),), 1)
+
+	@classmethod
+	def _newRowShift(cls, size):
+		shift = random.choice(range(1, size-1))
+		difficulty = 2
+		if shift == 1 or shift == size-1:
+			difficulty = 1
+		return Rule(MatrixRules.rowShift, (random.choice(range(size-1)), shift), difficulty)
+
+	@classmethod
+	def _newColShift(cls, size):
+		shift = random.choice(range(1, size-1))
+		difficulty = 2
+		if shift == 1 or shift == size-1:
+			difficulty = 1
+		return cls(MatrixRules.colShift, (random.choice(range(size-1)), shift), difficulty)
+
+	@classmethod
+	def _newSwapCase(cls, size):
+		return Rule(MatrixRules.swapCase, (random.choice(range(size)),random.choice(range(size))), 0.5)
+
+	@classmethod
+	def GetRandomRule(cls, size):
+		NameToFactoryMethod = {
+			MatrixRules.rotate : cls._newRotate,
+			MatrixRules.zigZagShift : cls._newZigZagShift,
+			MatrixRules.horizontalShift : cls._newHorizontalShift,
+			MatrixRules.verticalShift : cls._newVerticalShift,
+			MatrixRules.rowShift : cls._newRowShift,
+			MatrixRules.colShift : cls._newColShift,
+			MatrixRules.swapCase : cls._newSwapCase
+		}
+		name = MatrixRules(random.randrange(1, len(MatrixRules)+1))
+		return NameToFactoryMethod[name](size)
+
+	@classmethod
+	def GetRandomRules(cls, size, targetDifficulty):
+		difficulty = 0
+		rules = []
+		while difficulty <= targetDifficulty - .5:
+			rule = cls.GetRandomRule(size)
+			if rule.difficulty + difficulty <= targetDifficulty + .5:
+				difficulty += rule.difficulty
+				rules.append(rule)
+		return rules
+
 class Problem:
 
 	def __init__(self, size):
@@ -206,24 +291,14 @@ class Problem:
 		self.problem = ""
 
 	# linear sequence displayed left to right top to bottom
-	def NewSequence(self, ruleCount):
+	def NewSequence(self, difficulty):
 		self.problem = "sequence"
-		rules = [
-			( MatrixOperations.rotate, (random.choice((90, 180, 270)),) ),
-			( MatrixOperations.zigZagShift, (random.choice(range(1, self.size**2 -1)),) ),
-			( MatrixOperations.horizontalShift, (random.choice(range(1, self.size-1)),) ),
-			( MatrixOperations.verticalShift, (random.choice(range(1, self.size-1)),) ),
-			( MatrixOperations.rowShift, (random.choice(range(1, self.size-1)), random.choice(range(1, self.size-1))) ),
-			( MatrixOperations.colShift, (random.choice(range(1, self.size-1)), random.choice(range(1, self.size-1))) ),
-			( MatrixOperations.swapCase, (random.choice(range(self.size)),random.choice(range(self.size))) )
-		]
-		rules = random.sample(rules, ruleCount)
+		self.rules = Rule.GetRandomRules(self.size, difficulty)
 		for m in range(3):
 			nextMatrix = copy.deepcopy(self.matricies[-1])
-			for rule in rules:
-				nextMatrix.ApplyOperation(rule[0], rule[1])
+			for rule in self.rules:
+				nextMatrix.ApplyRule(rule)
 			self.matricies.append(nextMatrix)
-		self.rules = rules
 
 	# top right and bottom left result from applying interveaning operator on the top left
 	# bottom right comes from 
@@ -255,7 +330,7 @@ class Problem:
 	def DisplaySolution(self):
 		print(self.problem)
 		for rule in self.rules:
-			print(str(rule))
+			print(rule)
 		print(str(self.matricies[-1]))
 
 while  True:
