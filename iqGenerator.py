@@ -12,10 +12,8 @@
 # 		next from sample chars
 
 # ToDo
-#  -- Improve output formatting
-#  -- Improve difficulty selection
-#  -- Refactor
 #  -- Add remaining rule ideas
+#  -- Remove zig-zag shift as it is merely a composition of horizontal matrix + vertical column
 #  -- Add more problem types
 
 import string
@@ -353,15 +351,12 @@ class SwapCase(Transformation):
 		matrix.rows[self.row][self.col] = matrix.rows[self.row][self.col].swapcase()
 
 
-class Problem:
+class Sequence:
 
-	def __init__(self, size):
+	def __init__(self, size, difficulty):
 		self.size = size
 		self.matricies = []
 		self.matricies.append(CharMatrix(size))
-		self.transformations = []
-
-	def NewSequence(self, difficulty):
 		self.transformations = Transformation.GetRandomTransformations(self.size, difficulty)
 		for m in range(3):
 			nextMatrix = copy.deepcopy(self.matricies[-1])
@@ -369,7 +364,7 @@ class Problem:
 				trans.Transform(nextMatrix)
 			self.matricies.append(nextMatrix)
 
-	def _addMatriciesRows(self, start, stop):
+	def _matrixRowToStr(self, start, stop):
 		horizontalRule = ("-" * ( 4*self.size +1 ) + "  ") * (stop - start)
 		s = horizontalRule + "\n"
 		for i in range(self.size):
@@ -382,43 +377,59 @@ class Problem:
 
 	def DisplayProblem(self):
 		s = ""
-		s += self._addMatriciesRows(0, 3) + "\n"
+		s += self._matrixRowToStr(0, 3) + "\n"
 		print(s)
 
 	def DisplaySolution(self):
+		print("\n" + str(self.matricies[-1]) + "\n")
 		for transformation in self.transformations:
 			print(transformation)
-		print(str(self.matricies[-1]))
+		print()
 
-while True:
-	matrixSize = input("Enter matrix size (4): ")
-	if not matrixSize:
-		matrixSize = 4
-	try:
-		matrixSize = int(matrixSize)
-	except Exception:
-		pass
-	if not matrixSize or matrixSize < 2:
-		print("Matrix size must be an integer >=2")
-	else:
-		break
-while True:
-	difficulty = input("Enter game difficulty (4.0): ")
-	if not difficulty:
-		difficulty = 4
-	try:
-		difficulty = float(difficulty)
-	except Exception:
-		pass
-	if not difficulty or difficulty < 0.5:
-		print("difficulty must be a float >=0.5")
-	else:
-		break
 
-while  True:
-	prob = Problem(matrixSize)
-	prob.NewSequence(difficulty)
-	prob.DisplayProblem()
-	input("Press enter for solution: ")
-	prob.DisplaySolution()
-	print("\n  ---------  new problem  ----------  \n")
+def GetMatrixSize():
+	while True:
+		matrixSize = input("Enter matrix size (4): ")
+		if not matrixSize:
+			matrixSize = 4
+		try:
+			matrixSize = int(matrixSize)
+			if matrixSize < 3:
+				print("Matrix size must be >=3")
+			else:
+				return matrixSize
+		except Exception:
+			print("Matrix size must be an integer >=3.")
+
+def GetDifficulty():
+	while True:
+		difficultyStr = input("Easy (e), Medium (m) (default), or Hard (h)?: ")
+		if not difficultyStr:
+			difficultyStr = 'm'
+		difficultyStr = difficultyStr.lower()
+		if difficultyStr == 'easy' or difficultyStr == 'e':
+			return 3
+		if difficultyStr == 'medium' or difficultyStr == 'm':
+			return 5
+		if difficultyStr == 'hard' or difficultyStr == 'h':
+			return 8
+		print("Please select a valid difficulty.")
+
+def main():
+
+	print()
+	matrixSize = GetMatrixSize()
+	print()
+	difficulty = GetDifficulty()
+	print()
+
+	while  True:
+		seq = Sequence(matrixSize, difficulty)
+		seq.DisplayProblem()
+		input("Press enter for solution: ")
+		seq.DisplaySolution()
+		input("\n Press enter for new problem: ")
+		print("\n  ---------  new problem  ----------  \n")
+
+
+main()
