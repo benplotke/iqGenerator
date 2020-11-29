@@ -12,8 +12,9 @@
 # 		next from sample chars
 
 # ToDo
-#  -- Mix the case of the initial matrix rather than selecting from either upper or lower
-#  -- Allow user to select difficulty
+#  -- Improve output formatting
+#  -- Improve difficulty selection
+#  -- Refactor
 #  -- Add remaining rule ideas
 #  -- Add more problem types
 
@@ -43,10 +44,10 @@ class RandomChars:
 				if self.charCounts[c] < self.repeatLimit:
 					self.totalCharCount += 1
 					self.charCounts[c] += 1
-					return c
+					return self.RandomSwapCase(c)
 
 	@staticmethod
-	def RandomCaseSwap(c):
+	def RandomSwapCase(c):
 		if random.random() > .5:
 			return c.swapcase()
 		return c
@@ -55,7 +56,7 @@ class RandomChars:
 	@staticmethod
 	def GetNChars(n):
 		selectedChars = random.sample(string.ascii_lowercase, n)
-		return [RandomChars.RandomCaseSwap(c) for c in selectedChars]
+		return [c for c in selectedChars]
 
 class CharMatrix:
 
@@ -257,7 +258,7 @@ class ZigZagShift(Transformation):
 
 	@classmethod
 	def GetRandom(cls, size):
-		return cls(random.choice(range(-(size-1), size-1)), size)
+		return cls(random.choice(range(1, size-1)) * random.choice((-1, 1)), size)
 
 	def Transform(self, matrix):
 		matrix.ZigZagShift(self.shift)
@@ -389,10 +390,34 @@ class Problem:
 			print(transformation)
 		print(str(self.matricies[-1]))
 
+while True:
+	matrixSize = input("Enter matrix size (4): ")
+	if not matrixSize:
+		matrixSize = 4
+	try:
+		matrixSize = int(matrixSize)
+	except Exception:
+		pass
+	if not matrixSize or matrixSize < 2:
+		print("Matrix size must be an integer >=2")
+	else:
+		break
+while True:
+	difficulty = input("Enter game difficulty (4.0): ")
+	if not difficulty:
+		difficulty = 4
+	try:
+		difficulty = float(difficulty)
+	except Exception:
+		pass
+	if not difficulty or difficulty < 0.5:
+		print("difficulty must be a float >=0.5")
+	else:
+		break
 
 while  True:
-	prob = Problem(4)
-	prob.NewSequence(4)
+	prob = Problem(matrixSize)
+	prob.NewSequence(difficulty)
 	prob.DisplayProblem()
 	input("Press enter for solution: ")
 	prob.DisplaySolution()
