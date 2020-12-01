@@ -5,15 +5,11 @@
 # 		middle is combination of the sides
 
 # possible new sequence transformations
-# 	matrix
-# 		mirror
 # 	char
 # 		next alpha
 # 		next from sample chars
 
 # ToDo
-#  -- Add remaining rule ideas
-#  -- Remove zig-zag shift as it is merely a composition of horizontal matrix + vertical column
 #  -- Add more problem types
 
 import string
@@ -79,6 +75,28 @@ class CharMatrix:
 		self._i_ += 1
 		return result
 
+	def Reflect(self, axis):
+		reflected = []
+		if axis == 'x':
+			for j in range(self.size-1, -1, -1):
+				reflected.append(self.rows[j])
+		elif axis == 'y':
+			for j in range(self.size):
+				newRow = []
+				for i in range(self.size-1, -1, -1):
+					newRow.append(self.rows[j][i])
+				reflected.append(newRow)
+		elif axis == 'd':
+			for j in range(self.size-1, -1, -1):
+				newRow = []
+				for i in range(self.size-1, -1, -1):
+					newRow.append(self.rows[j][i])
+				reflected.append(newRow)
+		else:
+			raise Exception()
+		self.rows = reflected
+
+
 	def Rotate(self, degrees):
 		rotated = []
 		if degrees == 90 or degrees == -270:
@@ -102,16 +120,6 @@ class CharMatrix:
 		else:
 			raise Exception()
 		self.rows = rotated
-
-	def ZigZagShift(self, n):
-		shifted = [['_']*self.size for i in range(self.size)]
-		for x in range(self.size**2):
-			iOld = x // self.size
-			iNew = ( (x+n) // self.size ) % self.size
-			jOld = x % self.size
-			jNew = (x+n) % self.size
-			shifted[iNew][jNew] = self.rows[iOld][jOld]
-		self.rows = shifted
 
 	def RowShift(self, row, n):
 		n = -n
@@ -146,15 +154,19 @@ class Transformation:
 		if Rotate in types:
 			if len(types) == 1:
 				return False
+			if Reflect in types:
+				return newTrans.difficulty
 			if HorizontalShift in types or VerticalShift in types:
 				return newTrans.difficulty +1
-			if ZigZagShift in types or RowShift in types or ColShift in types:
+			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +2
 			raise Exception()
-		if ZigZagShift in types:
+		if Reflect in types:
 			if len(types) == 1:
 				return False
-			if HorizontalShift in types or VerticalShift in types or RowShift in types or ColShift in types:
+			if HorizontalShift in types or VerticalShift in types:
+				return newTrans.difficulty +1
+			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +2
 			raise Exception()
 		if HorizontalShift in types:
@@ -208,7 +220,7 @@ class Transformation:
 
 	@staticmethod
 	def GetRandomTransformation(size):
-		transformations = [Rotate, ZigZagShift, HorizontalShift, VerticalShift, RowShift, ColShift, SwapCase]
+		transformations = [Rotate, Reflect, HorizontalShift, VerticalShift, RowShift, ColShift, SwapCase]
 		return random.choice(transformations).GetRandom(size)
 
 	@classmethod
@@ -240,26 +252,25 @@ class Rotate(Transformation):
 	def Transform(self, matrix):
 		matrix.Rotate(self.degrees)
 
-class ZigZagShift(Transformation):
+class Reflect(Transformation):
 
-	def __init__(self, shift, size):
-		self.shift = shift
-		self.difficulty = 0
-		if abs(shift)%size == 1:
+	def __init__(self, axis):
+		self.axis = axis
+		self.difficulty = 1
+		if axis == 'd':
 			self.difficulty = 2
-		elif abs(shift)%size > 1:
-			self.difficulty = 3
-		self.baseDifficulty = self.difficulty
 
 	def __str__(self):
-		return f"Rows were shifted {self.shift} positions in a zig-zag pattern"
+		if self.axis == 'd':
+			return "Matrix was transposed"
+		return f"Matrix was reflected about the {self.axis}-axis"
 
 	@classmethod
 	def GetRandom(cls, size):
-		return cls(random.choice(range(1, size-1)) * random.choice((-1, 1)), size)
+		return cls(random.choice(('x', 'y', 'd')))
 
 	def Transform(self, matrix):
-		matrix.ZigZagShift(self.shift)
+		matrix.Reflect(self.axis)
 
 class HorizontalShift(Transformation):
 
@@ -272,7 +283,7 @@ class HorizontalShift(Transformation):
 
 	@classmethod
 	def GetRandom(cls, size):
-		return cls(random.choice(range(1, size-1)))
+		return cls(random.choice(range(1, size)))
 
 	def Transform(self, matrix):
 		for i in range(matrix.size):
@@ -289,7 +300,7 @@ class VerticalShift(Transformation):
 
 	@classmethod
 	def GetRandom(cls, size):
-		return cls(random.choice(range(1, size-1)))
+		return cls(random.choice(range(1, size)))
 
 	def Transform(self, matrix):
 		for j in range(matrix.size):
@@ -338,7 +349,7 @@ class SwapCase(Transformation):
 	def __init__(self, row, col):
 		self.row = row
 		self.col = col
-		self.difficulty = 0.5
+		self.difficulty = 0.25
 
 	def __str__(self):
 		return f"The case of row {self.row} column {self.col} has been swapped (zero indexing)"
@@ -408,11 +419,11 @@ def GetDifficulty():
 			difficultyStr = 'm'
 		difficultyStr = difficultyStr.lower()
 		if difficultyStr == 'easy' or difficultyStr == 'e':
-			return 3
+			return 2.5
 		if difficultyStr == 'medium' or difficultyStr == 'm':
-			return 5
+			return 4
 		if difficultyStr == 'hard' or difficultyStr == 'h':
-			return 8
+			return 6
 		print("Please select a valid difficulty.")
 
 def main():
