@@ -77,25 +77,19 @@ class CharMatrix:
 
 	def Reflect(self, axis):
 		reflected = []
+		for j in range(self.size-1, -1, -1):
+			reflected.append(self.rows[j])
+		self.rows = reflected
 		if axis == 'x':
-			for j in range(self.size-1, -1, -1):
-				reflected.append(self.rows[j])
+			pass # This if is here just so there is a complete enumeration of possibilities
 		elif axis == 'y':
-			for j in range(self.size):
-				newRow = []
-				for i in range(self.size-1, -1, -1):
-					newRow.append(self.rows[j][i])
-				reflected.append(newRow)
-		elif axis == 'd':
-			for j in range(self.size-1, -1, -1):
-				newRow = []
-				for i in range(self.size-1, -1, -1):
-					newRow.append(self.rows[j][i])
-				reflected.append(newRow)
+			self.Rotate(180)
+		elif axis == 'y=x':
+			self.Rotate(270)
+		elif axis == 'y=-x':
+			self.Rotate(90)
 		else:
 			raise Exception()
-		self.rows = reflected
-
 
 	def Rotate(self, degrees):
 		rotated = []
@@ -152,10 +146,8 @@ class Transformation:
 				return False
 			return newTrans.difficulty
 		if Rotate in types:
-			if len(types) == 1:
+			if len(types) == 1 or Reflect in types:
 				return False
-			if Reflect in types:
-				return newTrans.difficulty
 			if HorizontalShift in types or VerticalShift in types:
 				return newTrans.difficulty +1
 			if RowShift in types or ColShift in types:
@@ -221,7 +213,11 @@ class Transformation:
 	@staticmethod
 	def GetRandomTransformation(size):
 		transformations = [Rotate, Reflect, HorizontalShift, VerticalShift, RowShift, ColShift, SwapCase]
-		return random.choice(transformations).GetRandom(size)
+		ct = len(transformations)
+		# the 7 in ct*7 is because the 3 rotations and 4 reflacts are related.
+		# To get them with equal frequency, I need to move a 1/7th from rotations to reflections
+		weights = [6/(ct*7), 8/(ct*7), 1/ct, 1/ct, 1/ct, 1/ct, 6/ct]
+		return random.choices(transformations, weights)[0].GetRandom(size)
 
 	@classmethod
 	def GetRandomTransformations(cls, size, targetDifficulty):
@@ -235,12 +231,13 @@ class Transformation:
 				transformations.append(trans)
 		return transformations
 
-
 class Rotate(Transformation):
 
 	def __init__(self, degrees):
 		self.degrees = degrees
-		self.difficulty = 1
+		self.difficulty = 2
+		if degrees == 180:
+			self.difficulty = 1
 
 	def __str__(self):
 		return f"Rotate by {self.degrees} degrees"
@@ -257,17 +254,13 @@ class Reflect(Transformation):
 	def __init__(self, axis):
 		self.axis = axis
 		self.difficulty = 1
-		if axis == 'd':
-			self.difficulty = 2
 
 	def __str__(self):
-		if self.axis == 'd':
-			return "Matrix was transposed"
-		return f"Matrix was reflected about the {self.axis}-axis"
+		return f"Matrix was reflected about the {self.axis} axis"
 
 	@classmethod
 	def GetRandom(cls, size):
-		return cls(random.choice(('x', 'y', 'd')))
+		return cls(random.choice(('x', 'y', 'y=x', 'y=-x')))
 
 	def Transform(self, matrix):
 		matrix.Reflect(self.axis)
@@ -426,12 +419,21 @@ def GetDifficulty():
 			return 6
 		print("Please select a valid difficulty.")
 
+instructions = '''Instructions:
+   The leftmost matrix is the start matrix.
+   The center matrix is produced by applying a series of transformations to the left matrix.
+   The right matrix is produced by applying the same transformations to the center matrix.
+   If we apply the same transformations to the right matrix, we will get the final matrix.
+   Try to predict the final matrix.'''
+
 def main():
 
 	print()
 	matrixSize = GetMatrixSize()
 	print()
 	difficulty = GetDifficulty()
+	print()
+	print(instructions)
 	print()
 
 	while  True:
