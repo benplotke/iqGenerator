@@ -1,17 +1,3 @@
-# problem types
-# 	sequence
-# 		transformations are applied between every item in sequence
-# 	combination
-# 		middle is combination of the sides
-
-# possible new sequence transformations
-# 	char
-# 		next alpha
-# 		next from sample chars
-
-# ToDo
-#  -- Add more problem types
-
 import string
 import random
 import copy
@@ -149,7 +135,7 @@ class Transformation:
 			if len(types) == 1 or Reflect in types:
 				return False
 			if HorizontalShift in types or VerticalShift in types:
-				return newTrans.difficulty +1
+				return newTrans.difficulty +1.5
 			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +2
 			raise Exception()
@@ -157,7 +143,7 @@ class Transformation:
 			if len(types) == 1:
 				return False
 			if HorizontalShift in types or VerticalShift in types:
-				return newTrans.difficulty +1
+				return newTrans.difficulty +1.5
 			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +2
 			raise Exception()
@@ -213,10 +199,8 @@ class Transformation:
 	@staticmethod
 	def GetRandomTransformation(size):
 		transformations = [Rotate, Reflect, HorizontalShift, VerticalShift, RowShift, ColShift, SwapCase]
-		ct = len(transformations)
-		# the 7 in ct*7 is because the 3 rotations and 4 reflacts are related.
-		# To get them with equal frequency, I need to move a 1/7th from rotations to reflections
-		weights = [6/(ct*7), 8/(ct*7), 1/ct, 1/ct, 1/ct, 1/ct, 6/ct]
+		# The weigts are to account for rotation and reflection containng more than one transformation
+		weights = [3, 4, 1, 1, 1, 1, 1]
 		return random.choices(transformations, weights)[0].GetRandom(size)
 
 	@classmethod
@@ -407,9 +391,9 @@ def GetMatrixSize():
 
 def GetDifficulty():
 	while True:
-		difficultyStr = input("Easy (e), Medium (m) (default), or Hard (h)?: ")
+		difficultyStr = input("Easy (e) (default), Medium (m), or Hard (h)?: ")
 		if not difficultyStr:
-			difficultyStr = 'm'
+			difficultyStr = 'e'
 		difficultyStr = difficultyStr.lower()
 		if difficultyStr == 'easy' or difficultyStr == 'e':
 			return 2.5
@@ -424,7 +408,14 @@ instructions = '''Instructions:
    The center matrix is produced by applying a series of transformations to the left matrix.
    The right matrix is produced by applying the same transformations to the center matrix.
    If we apply the same transformations to the right matrix, we will get the final matrix.
-   Try to predict the final matrix.'''
+   Try to predict the final matrix.
+
+   Possible transformations:
+      Reflection about the x, y, y=x, and y=-x axis
+      Rotation by 90, 180, and 270 degrees
+      Shifting the matrix vertically or horizontally
+      Shifting a row or column
+      Swapping the case of a cell'''
 
 def main():
 
