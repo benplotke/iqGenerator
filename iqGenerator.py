@@ -369,45 +369,17 @@ class Sequence:
 			s += "\n" + horizontalRule + "\n"
 		return s
 
-	def DisplayProblem(self):
+	def GetProblemStr(self):
 		s = ""
 		s += self._matrixRowToStr(0, 3) + "\n"
-		print(s)
+		return s
 
-	def DisplaySolution(self):
-		print("\n" + str(self.matricies[-1]) + "\n")
+	def GetSolutionStr(self):
+		s = "\n" + str(self.matricies[-1]) + "\n\n"
 		for transformation in self.transformations:
-			print(transformation)
-		print()
+			s += str(transformation) + "\n"
+		return s
 
-
-def GetMatrixSize():
-	while True:
-		matrixSize = input("Enter matrix size (4): ")
-		if not matrixSize:
-			matrixSize = 4
-		try:
-			matrixSize = int(matrixSize)
-			if matrixSize < 3:
-				print("Matrix size must be >=3")
-			else:
-				return matrixSize
-		except Exception:
-			print("Matrix size must be an integer >=3.")
-
-def GetDifficulty():
-	while True:
-		difficultyStr = input("Easy (e) (default), Medium (m), or Hard (h)?: ")
-		if not difficultyStr:
-			difficultyStr = 'e'
-		difficultyStr = difficultyStr.lower()
-		if difficultyStr == 'easy' or difficultyStr == 'e':
-			return 2.5
-		if difficultyStr == 'medium' or difficultyStr == 'm':
-			return 4
-		if difficultyStr == 'hard' or difficultyStr == 'h':
-			return 6
-		print("Please select a valid difficulty.")
 
 instructions = '''Instructions:
    The leftmost matrix is the start matrix.
@@ -423,23 +395,59 @@ instructions = '''Instructions:
       Shifting a row or column
       Swapping the case of a cell'''
 
+
+class CmdInterface:
+
+	@staticmethod
+	def GetMatrixSize():
+		while True:
+			matrixSize = input("Enter matrix size (4): ")
+			if not matrixSize:
+				matrixSize = 4
+			try:
+				matrixSize = int(matrixSize)
+				if matrixSize < 3:
+					print("Matrix size must be >=3")
+				else:
+					return matrixSize
+			except Exception:
+				print("Matrix size must be an integer >=3.")
+
+	@staticmethod
+	def GetDifficulty():
+		while True:
+			difficultyStr = input("Easy (e) (default), Medium (m), or Hard (h)?: ")
+			if not difficultyStr:
+				difficultyStr = 'e'
+			difficultyStr = difficultyStr.lower()
+			if difficultyStr == 'easy' or difficultyStr == 'e':
+				return 2.5
+			if difficultyStr == 'medium' or difficultyStr == 'm':
+				return 4
+			if difficultyStr == 'hard' or difficultyStr == 'h':
+				return 6
+			print("Please select a valid difficulty.")
+
+	@classmethod
+	def Run(cls):
+
+		print()
+		matrixSize = cls.GetMatrixSize()
+		print()
+		difficulty = cls.GetDifficulty()
+		print()
+		print(instructions)
+		print()
+
+		while  True:
+			seq = Sequence(matrixSize, difficulty)
+			print(seq.GetProblemStr())
+			input("Press enter for solution: ")
+			print(seq.GetSolutionStr())
+			input("\n Press enter for new problem: ")
+			print("\n  ---------  new problem  ----------  \n")
+
 def main():
-
-	print()
-	matrixSize = GetMatrixSize()
-	print()
-	difficulty = GetDifficulty()
-	print()
-	print(instructions)
-	print()
-
-	while  True:
-		seq = Sequence(matrixSize, difficulty)
-		seq.DisplayProblem()
-		input("Press enter for solution: ")
-		seq.DisplaySolution()
-		input("\n Press enter for new problem: ")
-		print("\n  ---------  new problem  ----------  \n")
-
+	CmdInterface.Run()
 
 main()
