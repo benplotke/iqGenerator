@@ -124,15 +124,22 @@ class CharMatrix:
 
 class Transformation:
 
+	def __eq__(self, other):
+		return type(self) == type(other)
+
 	@staticmethod
 	def _conditionalDifficulty(oldTrans, newTrans):
-		types = set([type(oldTrans), type(newTrans)])
+
+		if oldTrans == newTrans:
+			return False
+
+		types = (type(oldTrans), type(newTrans))
+
 		if SwapCase in types:
-			if len(types) == 1 and oldTrans.row == newTrans.row and oldTrans.col == newTrans.col:
-				return False
 			return newTrans.difficulty
 		if Rotate in types:
-			if len(types) == 1 or Reflect in types:
+			# A rotation and reflection is always equivalent to a different reflection
+			if Reflect in types:
 				return False
 			if HorizontalShift in types or VerticalShift in types:
 				return newTrans.difficulty +1.5
@@ -140,31 +147,23 @@ class Transformation:
 				return newTrans.difficulty +2
 			raise Exception()
 		if Reflect in types:
-			if len(types) == 1:
-				return False
 			if HorizontalShift in types or VerticalShift in types:
 				return newTrans.difficulty +1.5
 			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +2
 			raise Exception()
 		if HorizontalShift in types:
-			if len(types) == 1:
-				return False
 			if VerticalShift in types:
 				return newTrans.difficulty
 			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +1
 			raise Exception()
 		if VerticalShift in types:
-			if len(types) == 1:
-				return False
 			if RowShift in types or ColShift in types:
 				return newTrans.difficulty +1
 			raise Exception()
 		if RowShift in types:
-			if len(types) == 1:
-				if oldTrans.row == newTrans.row:
-					return False
+			if type(oldTrans) == type(newTrans):
 				if abs(oldTrans.row - newTrans.row) == 1 and oldTrans.shift == newTrans.shift:
 					return 0.1
 				return newTrans.difficulty
@@ -172,9 +171,7 @@ class Transformation:
 				return newTrans.difficulty +1
 			raise Exception()
 		if ColShift in types:
-			if len(types) == 1:
-				if oldTrans.col == newTrans.col:
-					return False
+			if type(oldTrans) == type(newTrans):
 				if abs(oldTrans.col - newTrans.col) == 1 and oldTrans.shift == newTrans.shift:
 					return 0.1
 				return newTrans.difficulty
@@ -199,7 +196,7 @@ class Transformation:
 	@staticmethod
 	def GetRandomTransformation(size):
 		transformations = [Rotate, Reflect, HorizontalShift, VerticalShift, RowShift, ColShift, SwapCase]
-		# The weigts are to account for rotation and reflection containng more than one transformation
+		# The weights are to account for rotation and reflection containng more than one transformation
 		weights = [3, 4, 1, 1, 1, 1, 1]
 		return random.choices(transformations, weights)[0].GetRandom(size)
 
@@ -292,6 +289,9 @@ class RowShift(Transformation):
 		if abs(shift) == 1:
 			self.difficulty = 1
 
+	def __eq__(self, other):
+		return type(self) == type(other) and self.row == other.row
+
 	def __str__(self):
 		return f"Row {self.row} was shifted {self.shift} positions horizontally (zero indexing)"
 
@@ -311,6 +311,9 @@ class ColShift(Transformation):
 		if abs(shift) == 1:
 			self.difficulty = 1
 
+	def __eq__(self, other):
+		return type(self) == type(other) and self.col == other.col
+
 	def __str__(self):
 		return f"Column {self.col} was shifted {self.shift} positions vertically (zero indexing)"
 
@@ -327,6 +330,9 @@ class SwapCase(Transformation):
 		self.row = row
 		self.col = col
 		self.difficulty = 0.25
+
+	def __eq__(self, other):
+		return type(self) == type(other) and self.row == other.row and self.col == other.col
 
 	def __str__(self):
 		return f"The case of row {self.row} column {self.col} has been swapped (zero indexing)"
