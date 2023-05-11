@@ -4,18 +4,17 @@ import Data.Char (toLower, toUpper, isUpper)
 import System.Random.Stateful (newStdGen, StdGen, uniformR, uniform)
 import Control.Applicative (Applicative(liftA2))
 import Data.Maybe (isNothing)
+import Text.Read (readMaybe)
+import GHC.IO.Handle (hFlush)
+import GHC.IO.Handle.FD (stdout)
 
 main :: IO ()
 main = do
-    putStrLn "Enter Matrix Size: "
-    sizeString <- getLine
+    mSize <- getMatrixSize
     g <- newStdGen
-    let mSize = read sizeString :: Int
     let (m1, g') = randMatrix mSize g
 
-    putStrLn "Enter Difficulty: "
-    dString <- getLine
-    let d = read dString :: Float
+    d <- difficultyScaler <$> getDifficulty
     let (ts, _) = genTransforms mSize d g'
     let t = foldl1 (.) (getTransform <$> ts)
 
@@ -23,15 +22,18 @@ main = do
     let m3 = t m2
     let m4 = t m3
 
+    putLn
     print m1
-    putStrLn ""
+    putLn
     print m2
-    putStrLn ""
+    putLn
     print m3
-    putStrLn ""
-    putStrLn "Press Enter to see solution: "
+    putLn
+    putStr' "Press Enter to see solution: "
     _ <- getLine
+    putLn
     print m4
+    putLn
 
 type Row = [Char]
 newtype Matrix = ToM { froM :: [Row] }
@@ -60,6 +62,46 @@ data Transform =
     | ColShift Int Int
     | SwapCase Int Int
     deriving (Eq)
+
+data Difficulty = Easy | Medium | Hard
+
+getMatrixSize :: IO Int
+getMatrixSize = do
+    putStr' "Enter Matrix Size >= 3: "
+    sizeString <- getLine
+    let maybeSize = readMaybe sizeString :: Maybe Int
+    mSize <- maybe getMatrixSize return maybeSize
+    if mSize >= 3
+        then return mSize
+        else getMatrixSize
+
+getDifficulty :: IO Difficulty
+getDifficulty = do
+    putStr' "Easy (e) (default), Medium (m), or Hard (h)?: "
+    dStr <- getLine
+    let d = parseDifficulty dStr
+    maybe getDifficulty return d
+
+parseDifficulty :: String -> Maybe Difficulty
+parseDifficulty d
+    | d' == "e" || d' == "easy" || d' == "" = Just Easy
+    | d' == "m" || d' == "medium" = Just Medium
+    | d' == "h" || d' == "hard" = Just Hard
+    | otherwise = Nothing
+    where d' = toLower <$> d
+
+difficultyScaler :: Difficulty -> Float
+difficultyScaler Easy = 2.5
+difficultyScaler Medium = 4
+difficultyScaler Hard = 6
+
+putStr' :: String -> IO ()
+putStr' s = do
+    putStr s
+    hFlush stdout
+
+putLn :: IO ()
+putLn = putStrLn ""
 
 genTransforms :: Int -> Float -> StdGen -> ([Transform], StdGen)
 genTransforms mSize targetD = genTransforms' mSize targetD []
