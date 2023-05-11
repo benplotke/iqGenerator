@@ -2,7 +2,6 @@ import Data.List (transpose, intercalate, intersperse)
 import GHC.Parser.CharClass (is_upper)
 import Data.Char (toLower, toUpper, isUpper)
 import System.Random.Stateful (newStdGen, StdGen, uniformR, uniform)
-import Control.Applicative (Applicative(liftA2))
 import Data.Maybe (isNothing)
 import Text.Read (readMaybe)
 import GHC.IO.Handle (hFlush)
@@ -122,7 +121,6 @@ genTransforms' mSize targetD priorTs g = do
     else
         genTransforms' mSize targetD ts g''
 
-
 genTransform :: StdGen -> Int -> TransformT -> (Transform, StdGen)
 genTransform g _ RotateT =
     let (r, g') = selectRandom g [R90, R180, R270]
@@ -184,8 +182,9 @@ getTransform (SwapCase row col) = swapcase' row col
 cumulativeDifficulty :: [Transform] -> Maybe Float
 cumulativeDifficulty [] = Just 0
 cumulativeDifficulty [x] = Just $ difficulty x
-cumulativeDifficulty (x:xs) = liftA2 (+)
-    (additionalDifficulty x xs) (cumulativeDifficulty xs)
+cumulativeDifficulty (x:xs) = (+)
+    <$> additionalDifficulty x xs
+    <*> cumulativeDifficulty xs
 
 additionalDifficulty :: Transform -> [Transform] -> Maybe Float
 additionalDifficulty t [] = Just $ difficulty t
@@ -199,14 +198,10 @@ additionalDifficulty t ts =
           tDifficulty = Just $ difficulty t
 
 maxFail :: (Ord a) => Maybe a -> Maybe a -> Maybe a
-maxFail Nothing _ = Nothing
-maxFail _ Nothing = Nothing
-maxFail a b = max a b
+maxFail a b = max <$> a <*> b
 
 minFail :: (Ord a) => Maybe a -> Maybe a -> Maybe a
-minFail Nothing _ = Nothing
-minFail _ Nothing = Nothing
-minFail a b = min a b
+minFail a b = min <$> a <*> b
 
 conditionalDifficulty :: Transform -> Transform -> Maybe Float
 conditionalDifficulty newT oldT =
@@ -257,7 +252,6 @@ selectRandom g xs =
     let l = length xs
         (i, g') = uniformR (0 :: Int, l - (1 :: Int)) g
     in (xs !! i, g')
-
 
 randRow ::  Int -> StdGen -> ([Char], StdGen)
 randRow n = randReplicate n randChar
