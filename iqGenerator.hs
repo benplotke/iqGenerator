@@ -1,19 +1,22 @@
 import Data.List (transpose, intercalate, intersperse)
 import GHC.Parser.CharClass (is_upper)
 import Data.Char (toLower, toUpper, isUpper)
-import System.Random.Stateful (newStdGen, StdGen, uniformR, uniform)
+import System.Random.Stateful (StdGen, uniformR, uniform, mkStdGen)
 import Data.Maybe (isNothing)
 import Text.Read (readMaybe)
 import GHC.IO.Handle (hFlush)
 import GHC.IO.Handle.FD (stdout)
+import Data.Time.Clock.System (getSystemTime, SystemTime (systemSeconds))
 
 main :: IO ()
 main = do
     mSize <- getMatrixSize
-    g <- newStdGen
-    let (m1, g') = randMatrix mSize g
-
     d <- difficultyScaler <$> getDifficulty
+    sysTime <- getSystemTime
+    let secs = fromIntegral $ systemSeconds sysTime
+    let g = mkStdGen secs
+
+    let (m1, g') = randMatrix mSize g
     let (ts, _) = genTransforms mSize d g'
     let t = foldl1 (.) (getTransform <$> ts)
 
@@ -31,6 +34,8 @@ main = do
     putStr' "Press Enter to see solution: "
     _ <- getLine
     putLn
+    putStrLn $ "Using transforms: " ++ show ts
+    putLn
     print m4
     putLn
 
@@ -40,8 +45,8 @@ newtype Matrix = ToM { froM :: [Row] }
 instance Show Matrix
     where show (ToM rows) = ' ' : intercalate "\n " [intersperse ' ' r | r <- rows]
 
-data Rotation = R90 | R180 | R270 deriving (Eq)
-data Axis = X | Y | XY | NXY deriving (Eq)
+data Rotation = R90 | R180 | R270 deriving (Eq, Show)
+data Axis = X | Y | XY | NXY deriving (Eq, Show)
 data TransformT =
     RotateT
     | ReflectT
@@ -60,7 +65,7 @@ data Transform =
     | RowShift Int Int
     | ColShift Int Int
     | SwapCase Int Int
-    deriving (Eq)
+    deriving (Eq, Show)
 
 data Difficulty = Easy | Medium | Hard
 
@@ -113,7 +118,7 @@ genTransforms' mSize targetD priorTs g = do
     let ts = t:priorTs
     let d = cumulativeDifficulty ts
     let overshot = d > Just (targetD + 0.5)
-    let reached = (abs . (-) targetD <$> d) < Just 0.5
+    let reached = (abs . (-) targetD <$> d) <= Just 0.5
     if isNothing d || overshot then
         genTransforms' mSize targetD priorTs g''
     else if reached then
@@ -214,7 +219,9 @@ conditionalDifficulty newT oldT =
             abs (c1 - c2) == 1 && s1 == s2
         isCombinedShift _ _ = False
     in
-        if anyC SwapCaseT then
+        if oldT == newT then
+            Nothing
+        else if anyC SwapCaseT then
             Just nd
         else if anyC RotateT then
             if anyC ReflectT then
@@ -250,7 +257,7 @@ conditionalDifficulty newT oldT =
 selectRandom :: StdGen -> [a] -> (a, StdGen)
 selectRandom g xs =
     let l = length xs
-        (i, g') = uniformR (0 :: Int, l - (1 :: Int)) g
+        (i, g') = uniformR (0, l - 1) g
     in (xs !! i, g')
 
 randRow ::  Int -> StdGen -> ([Char], StdGen)
