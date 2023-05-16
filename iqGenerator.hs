@@ -153,36 +153,39 @@ genTransform g mSize SwapCaseT =
     in (SwapCase row col, g'')
 
 getType :: Transform -> TransformT
-getType (Rotate _) = RotateT
-getType (Reflect _) = ReflectT
-getType (HorizontalShift _) = HorizontalShiftT
-getType (VerticalShift _) = VerticalShiftT
-getType (RowShift _ _) = RowShiftT
-getType (ColShift _ _) = ColShiftT
-getType (SwapCase _ _) = SwapCaseT
+getType t = case t of
+    (Rotate _) -> RotateT
+    (Reflect _) -> ReflectT
+    (HorizontalShift _) -> HorizontalShiftT
+    (VerticalShift _) -> VerticalShiftT
+    (RowShift _ _) -> RowShiftT
+    (ColShift _ _) -> ColShiftT
+    (SwapCase _ _) -> SwapCaseT
 
 difficulty :: Transform -> Float
-difficulty (Rotate degree) = if degree == R180 then 1 else 2
-difficulty (Reflect _) = 1
-difficulty (HorizontalShift _) = 1
-difficulty (VerticalShift _) = 1
-difficulty (RowShift _ s) = if abs s == 1 then 1 else 2
-difficulty (ColShift _ s) = if abs s == 1 then 1 else 2
-difficulty (SwapCase _ _) = 0.25
+difficulty t = case t of
+    (Rotate degree) -> if degree == R180 then 1 else 2
+    (Reflect _) -> 1
+    (HorizontalShift _) -> 1
+    (VerticalShift _) -> 1
+    (RowShift _ s) -> if abs s == 1 then 1 else 2
+    (ColShift _ s) -> if abs s == 1 then 1 else 2
+    (SwapCase _ _) -> 0.25
 
 getTransform :: Transform -> (Matrix -> Matrix)
-getTransform (Rotate R90) = rotate90
-getTransform (Rotate R180) = rotate180
-getTransform (Rotate R270) = rotate270
-getTransform (Reflect X) = xreflect
-getTransform (Reflect Y) = yreflect
-getTransform (Reflect XY) = xyreflect
-getTransform (Reflect NXY) = nxyreflect
-getTransform (HorizontalShift s) = hshift s
-getTransform (VerticalShift s) = vshift s
-getTransform (RowShift row s) = rshift row s
-getTransform (ColShift col s) = cshift col s
-getTransform (SwapCase row col) = swapcase' row col
+getTransform t = case t of
+    (Rotate R90) -> rotate90
+    (Rotate R180) -> rotate180
+    (Rotate R270) -> rotate270
+    (Reflect X) -> xreflect
+    (Reflect Y) -> yreflect
+    (Reflect XY) -> xyreflect
+    (Reflect NXY) -> nxyreflect
+    (HorizontalShift s) -> hshift s
+    (VerticalShift s) -> vshift s
+    (RowShift row s) -> rshift row s
+    (ColShift col s) -> cshift col s
+    (SwapCase row col) -> swapcase' row col
 
 cumulativeDifficulty :: [Transform] -> Maybe Float
 cumulativeDifficulty [] = Just 0
