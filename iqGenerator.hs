@@ -7,6 +7,8 @@ import Text.Read (readMaybe)
 import GHC.IO.Handle (hFlush)
 import GHC.IO.Handle.FD (stdout)
 import Data.Time.Clock.System (getSystemTime, SystemTime (systemSeconds))
+import Control.Monad.Trans.State ( State, state, runState )
+import Control.Monad (replicateM)
 
 main :: IO ()
 main = do
@@ -16,8 +18,8 @@ main = do
     let secs = fromIntegral $ systemSeconds sysTime
     let g = mkStdGen secs
 
-    let (m1, g') = randMatrix mSize g
-    let (ts, _) = genTransforms mSize d g'
+    let (m1, g') = runState (randMatrix mSize) g
+    let (ts, _) = runState (genTransforms mSize d) g'
     let t = foldl1 (.) (getTransform <$> ts)
 
     let m2 = t m1
@@ -107,50 +109,50 @@ putStr' s = do
 putLn :: IO ()
 putLn = putStrLn ""
 
-genTransforms :: Int -> Float -> StdGen -> ([Transform], StdGen)
+genTransforms :: Int -> Float -> State StdGen [Transform]
 genTransforms mSize targetD = genTransforms' mSize targetD []
 
-genTransforms' :: Int -> Float -> [Transform] -> StdGen -> ([Transform], StdGen)
-genTransforms' mSize targetD priorTs g = do
+genTransforms' :: Int -> Float -> [Transform] -> State StdGen [Transform]
+genTransforms' mSize targetD priorTs = do
     let transformTs = [RotateT, ReflectT, HorizontalShiftT, VerticalShiftT, RowShiftT, ColShiftT, SwapCaseT]
-    let (tt, g') = selectRandom g transformTs
-    let (t, g'') = genTransform g' mSize tt
+    tt <- selectRandom transformTs
+    t <- genTransform mSize tt
     let ts = t:priorTs
     let d = cumulativeDifficulty ts
     let overshot = d > Just (targetD + 0.5)
     let reached = (abs . (-) targetD <$> d) <= Just 0.5
     if isNothing d || overshot then
-        genTransforms' mSize targetD priorTs g''
+        genTransforms' mSize targetD priorTs
     else if reached then
-        (ts, g'')
+        return ts
     else
-        genTransforms' mSize targetD ts g''
+        genTransforms' mSize targetD ts
 
-genTransform :: StdGen -> Int -> TransformT -> (Transform, StdGen)
-genTransform g _ RotateT =
-    let (r, g') = selectRandom g [R90, R180, R270]
-    in (Rotate r, g')
-genTransform g _ ReflectT =
-    let (a, g') = selectRandom g [X,Y, XY, NXY]
-    in (Reflect a, g')
-genTransform g mSize HorizontalShiftT =
-    let (s, g') = uniformR (1, mSize - 1) g
-    in (HorizontalShift s, g')
-genTransform g mSize VerticalShiftT =
-    let (s, g') = uniformR (1, mSize - 1) g
-    in (VerticalShift s, g')
-genTransform g mSize RowShiftT =
-    let (row, g') = uniformR (1, mSize) g
-        (s, g'') = uniformR (1, mSize - 1) g'
-    in (RowShift row s, g'')
-genTransform g mSize ColShiftT =
-    let (col, g') = uniformR (1, mSize) g
-        (s, g'') = uniformR (1, mSize - 1) g'
-    in (ColShift col s, g'')
-genTransform g mSize SwapCaseT =
-    let (row, g') = uniformR (1, mSize) g
-        (col, g'') = uniformR (1, mSize) g'
-    in (SwapCase row col, g'')
+genTransform :: Int -> TransformT -> State StdGen Transform
+genTransform _ RotateT = do
+    r <- selectRandom [R90, R180, R270]
+    return $ Rotate r
+genTransform _ ReflectT = do
+    a <- selectRandom [X,Y, XY, NXY]
+    return $ Reflect a
+genTransform mSize HorizontalShiftT = do
+    s <- state $ uniformR (1, mSize - 1)
+    return $ HorizontalShift s
+genTransform mSize VerticalShiftT = do
+    s <- state $ uniformR (1, mSize - 1)
+    return $ VerticalShift s
+genTransform mSize RowShiftT = do
+    row <- state $ uniformR (1, mSize)
+    s <- state $ uniformR (1, mSize - 1)
+    return $ RowShift row s
+genTransform mSize ColShiftT = do
+    col <- state $ uniformR (1, mSize)
+    s <- state $ uniformR (1, mSize - 1)
+    return $ ColShift col s
+genTransform mSize SwapCaseT = do
+    row <- state $ uniformR (1, mSize)
+    col <- state $ uniformR (1, mSize)
+    return $ SwapCase row col
 
 getType :: Transform -> TransformT
 getType t = case t of
@@ -257,51 +259,40 @@ conditionalDifficulty newT oldT =
         else
             Just nd
 
-selectRandom :: StdGen -> [a] -> (a, StdGen)
-selectRandom g xs =
+selectRandom :: [a] -> State StdGen a
+selectRandom xs = do
     let l = length xs
-        (i, g') = uniformR (0, l - 1) g
-    in (xs !! i, g')
+    i <- state $ uniformR (0, l - 1)
+    return $ xs !! i
 
-randRow ::  Int -> StdGen -> ([Char], StdGen)
-randRow n = randReplicate n randChar
+randMatrix :: Int -> State StdGen Matrix
+randMatrix n = do
+    rows <- replicateM n (randRow n)
+    return $ ToM rows
 
-randReplicate :: Int -> (StdGen -> (a, StdGen)) -> StdGen -> ([a], StdGen)
-randReplicate n f g
-    | n > 0 =
-        let (a, g') = f g
-            (as, g'') = randReplicate (n-1) f g'
-        in (a:as, g'')
-    | otherwise = ([], g)
+randRow ::  Int -> State StdGen [Char]
+randRow n = replicateM n randChar
 
-randChar :: StdGen -> (Char, StdGen)
-randChar g =
-    let (c, g') = uniformR ('a', 'z') g
-    in randSwapCase g' c
+randChar :: State StdGen Char
+randChar = do
+    c <- state $ uniformR ('a', 'z')
+    randSwapCase c
 
-randSwapCase :: StdGen -> Char -> (Char, StdGen)
-randSwapCase g c =
-    let (b, g') = randBool g
-        c' = condSwap c b
-    in (c', g')
+randSwapCase :: Char -> State StdGen Char
+randSwapCase c = do
+    b <- randBool
+    return $ condSwap c b
 
-randBool :: StdGen -> (Bool, StdGen)
-randBool = uniform
+randBool :: State StdGen Bool
+randBool = state uniform
 
 condSwap :: Char -> Bool -> Char
-condSwap c b
-    | b = swapcase c
-    | otherwise = c
+condSwap c b = if b then swapcase c else c
 
 swapcase :: Char -> Char
 swapcase c
     | isUpper c = toLower c
     | otherwise = toUpper c
-
-randMatrix :: Int -> StdGen -> (Matrix, StdGen)
-randMatrix n g =
-    let (rows, g') = randReplicate n (randRow n) g
-    in (ToM rows, g')
 
 shift :: Int -> [a] -> [a]
 shift n xs = drop n xs ++ take n xs
