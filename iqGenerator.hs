@@ -156,38 +156,38 @@ genTransform mSize SwapCaseT = do
 
 getType :: Transform -> TransformT
 getType t = case t of
-    (Rotate _) -> RotateT
-    (Reflect _) -> ReflectT
-    (HorizontalShift _) -> HorizontalShiftT
-    (VerticalShift _) -> VerticalShiftT
-    (RowShift _ _) -> RowShiftT
-    (ColShift _ _) -> ColShiftT
-    (SwapCase _ _) -> SwapCaseT
+    Rotate _          -> RotateT
+    Reflect _         -> ReflectT
+    HorizontalShift _ -> HorizontalShiftT
+    VerticalShift _   -> VerticalShiftT
+    RowShift _ _      -> RowShiftT
+    ColShift _ _      -> ColShiftT
+    SwapCase _ _      -> SwapCaseT
 
 difficulty :: Transform -> Float
 difficulty t = case t of
-    (Rotate degree) -> if degree == R180 then 1 else 2
-    (Reflect _) -> 1
-    (HorizontalShift _) -> 1
-    (VerticalShift _) -> 1
-    (RowShift _ s) -> if abs s == 1 then 1 else 2
-    (ColShift _ s) -> if abs s == 1 then 1 else 2
-    (SwapCase _ _) -> 0.25
+    Rotate degree -> if degree == R180 then 1 else 2
+    Reflect _         -> 1
+    HorizontalShift _ -> 1
+    VerticalShift _   -> 1
+    RowShift _ s      -> if abs s == 1 then 1 else 2
+    ColShift _ s      -> if abs s == 1 then 1 else 2
+    SwapCase _ _      -> 0.25
 
 getTransform :: Transform -> (Matrix -> Matrix)
 getTransform t = case t of
-    (Rotate R90) -> rotate90
-    (Rotate R180) -> rotate180
-    (Rotate R270) -> rotate270
-    (Reflect X) -> xreflect
-    (Reflect Y) -> yreflect
-    (Reflect XY) -> xyreflect
-    (Reflect NXY) -> nxyreflect
-    (HorizontalShift s) -> hshift s
-    (VerticalShift s) -> vshift s
-    (RowShift row s) -> rshift row s
-    (ColShift col s) -> cshift col s
-    (SwapCase row col) -> swapcase' row col
+    Rotate R90        -> rotate90
+    Rotate R180       -> rotate180
+    Rotate R270       -> rotate270
+    Reflect X         -> xreflect
+    Reflect Y         -> yreflect
+    Reflect XY        -> xyreflect
+    Reflect NXY       -> nxyreflect
+    HorizontalShift s -> hshift s
+    VerticalShift s   -> vshift s
+    RowShift row s    -> rshift row s
+    ColShift col s    -> cshift col s
+    SwapCase row col  -> swapcase' row col
 
 cumulativeDifficulty :: [Transform] -> Maybe Float
 cumulativeDifficulty [] = Just 0
@@ -214,50 +214,32 @@ minFail :: (Ord a) => Maybe a -> Maybe a -> Maybe a
 minFail a b = min <$> a <*> b
 
 conditionalDifficulty :: Transform -> Transform -> Maybe Float
-conditionalDifficulty newT oldT =
-    let nd = difficulty newT
-        cs = (getType <$> [oldT, newT])
-        anyC c = elem c cs
+conditionalDifficulty newT oldT
+    | oldT == newT                            = Nothing
+    | hasOne  SwapCaseT                       = Just nd
+    | hasBoth RotateT ReflectT                = Nothing
+    | hasBoth RotateT HorizontalShiftT        = Just $ nd + 1.5
+    | hasBoth RotateT VerticalShiftT          = Just $ nd + 1.5
+    | hasOne  RotateT                         = Just $ nd + 2
+    | hasBoth ReflectT HorizontalShiftT       = Just $ nd + 1.5
+    | hasBoth ReflectT VerticalShiftT         = Just $ nd + 1.5
+    | hasOne  ReflectT                        = Just $ nd + 2
+    | hasBoth HorizontalShiftT VerticalShiftT = Just nd
+    | hasOne  HorizontalShiftT                = Just $ nd + 1
+    | hasOne  VerticalShiftT                  = Just $ nd + 1
+    | hasBoth RowShiftT ColShiftT             = Just $ nd + 1
+    | isCombinedShift oldT newT               = Just 0.1
+    | otherwise = Nothing
+    where
+        nd = difficulty newT
+        cs = getType <$> [oldT, newT]
+        hasOne c = elem c cs
+        hasBoth t1 t2 = hasOne t1 && hasOne t2
         isCombinedShift (RowShift r1 s1) (RowShift r2 s2) =
             abs (r1 - r2) == 1 && s1 == s2
         isCombinedShift (ColShift c1 s1) (ColShift c2 s2) =
             abs (c1 - c2) == 1 && s1 == s2
         isCombinedShift _ _ = False
-    in
-        if oldT == newT then
-            Nothing
-        else if anyC SwapCaseT then
-            Just nd
-        else if anyC RotateT then
-            if anyC ReflectT then
-                Nothing
-            else if anyC HorizontalShiftT || anyC VerticalShiftT then
-                Just $ nd + 1.5
-            else
-                Just $ nd + 2
-        else if anyC ReflectT then
-            if anyC HorizontalShiftT || anyC VerticalShiftT then
-                Just $ nd + 1.5
-            else
-                Just $ nd + 2
-        else if anyC HorizontalShiftT then
-            if anyC VerticalShiftT then
-                Just nd
-            else
-                Just $ nd + 1
-        else if anyC VerticalShiftT then
-            Just $ nd + 1
-        else if anyC RowShiftT then
-            if anyC ColShiftT then
-                Just $ nd + 1
-            else if isCombinedShift oldT newT then
-                Just 0.1
-            else
-                Just nd
-        else if isCombinedShift oldT newT then
-            Just 0.1
-        else
-            Just nd
 
 selectRandom :: [a] -> State StdGen a
 selectRandom xs = do
@@ -280,8 +262,7 @@ randChar = do
 
 randSwapCase :: Char -> State StdGen Char
 randSwapCase c = do
-    b <- randBool
-    return $ condSwap c b
+    condSwap c <$> randBool
 
 randBool :: State StdGen Bool
 randBool = state uniform
