@@ -9,6 +9,18 @@ import GHC.IO.Handle.FD (stdout)
 import Data.Time.Clock.System (getSystemTime, SystemTime (systemSeconds))
 import Control.Monad.Trans.State ( State, state, runState )
 import Control.Monad (replicateM)
+import Control.Applicative (Applicative(liftA2))
+
+-- a) store type for difficulty
+-- b) store data for difficulty and producing function
+-- c) produce transform function
+-- d) randomly select transform to generate
+-- e) generate random instance of transform
+
+-- type class, we need compiler to guarantee all cases have been covered, 
+-- template haskell to generate prisms, prisms are not simple values
+-- gadt, could help with identifying which, but still need to have enum shadow
+-- first class patterns, could help with identifying which
 
 main :: IO ()
 main = do
@@ -47,17 +59,8 @@ newtype Matrix = ToM { froM :: [Row] }
 instance Show Matrix
     where show (ToM rows) = ' ' : intercalate "\n " [intersperse ' ' r | r <- rows]
 
-data Rotation = R90 | R180 | R270 deriving (Eq, Show)
-data Axis = X | Y | XY | NXY deriving (Eq, Show)
-data TransformT =
-    RotateT
-    | ReflectT
-    | HorizontalShiftT
-    | VerticalShiftT
-    | RowShiftT
-    | ColShiftT
-    | SwapCaseT
-    deriving (Eq)
+data Rotation = R90 | R180 | R270 deriving (Eq, Show, Enum)
+data Axis = X | Y | XY | NXY deriving (Eq, Show, Bounded, Enum)
 
 data Transform =
     Rotate Rotation
@@ -113,60 +116,50 @@ genTransforms :: Int -> Float -> State StdGen [Transform]
 genTransforms mSize targetD = genTransforms' mSize targetD []
 
 genTransforms' :: Int -> Float -> [Transform] -> State StdGen [Transform]
-genTransforms' mSize targetD priorTs = do
-    let transformTs = [RotateT, ReflectT, HorizontalShiftT, VerticalShiftT, RowShiftT, ColShiftT, SwapCaseT]
-    tt <- selectRandom transformTs
-    t <- genTransform mSize tt
-    let ts = t:priorTs
+genTransforms' mSize targetDifficulty priorTs = do
+    generator <- selectRandom transformGenerators
+    newT <- generator mSize
+    let ts = newT:priorTs
     let d = cumulativeDifficulty ts
-    let overshot = d > Just (targetD + 0.5)
-    let reached = (abs . (-) targetD <$> d) <= Just 0.5
+    let overshot = d > Just (targetDifficulty + 0.5)
+    let reached = (abs . (-) targetDifficulty <$> d) <= Just 0.5
     if isNothing d || overshot then
-        genTransforms' mSize targetD priorTs
+        genTransforms' mSize targetDifficulty priorTs
     else if reached then
         return ts
     else
-        genTransforms' mSize targetD ts
+        genTransforms' mSize targetDifficulty ts
 
-genTransform :: Int -> TransformT -> State StdGen Transform
-genTransform _ RotateT = do
-    r <- selectRandom [R90, R180, R270]
-    return $ Rotate r
-genTransform _ ReflectT = do
-    a <- selectRandom [X,Y, XY, NXY]
-    return $ Reflect a
-genTransform mSize HorizontalShiftT = do
-    s <- state $ uniformR (1, mSize - 1)
-    return $ HorizontalShift s
-genTransform mSize VerticalShiftT = do
-    s <- state $ uniformR (1, mSize - 1)
-    return $ VerticalShift s
-genTransform mSize RowShiftT = do
-    row <- state $ uniformR (1, mSize)
-    s <- state $ uniformR (1, mSize - 1)
-    return $ RowShift row s
-genTransform mSize ColShiftT = do
-    col <- state $ uniformR (1, mSize)
-    s <- state $ uniformR (1, mSize - 1)
-    return $ ColShift col s
-genTransform mSize SwapCaseT = do
-    row <- state $ uniformR (1, mSize)
-    col <- state $ uniformR (1, mSize)
-    return $ SwapCase row col
-
-getType :: Transform -> TransformT
-getType t = case t of
-    Rotate _          -> RotateT
-    Reflect _         -> ReflectT
-    HorizontalShift _ -> HorizontalShiftT
-    VerticalShift _   -> VerticalShiftT
-    RowShift _ _      -> RowShiftT
-    ColShift _ _      -> ColShiftT
-    SwapCase _ _      -> SwapCaseT
+transformGenerators :: [Int -> State StdGen Transform]
+transformGenerators = 
+    [\_ -> do
+        r <- selectRandom [R90, R180, R270]
+        return $ Rotate r
+    ,\_ -> do
+        a <- selectRandom [X,Y, XY, NXY]
+        return $ Reflect a
+    ,\mSize -> do
+        s <- state $ uniformR (1, mSize - 1)
+        return $ HorizontalShift s
+    ,\mSize -> do
+        s <- state $ uniformR (1, mSize - 1)
+        return $ VerticalShift s
+    ,\mSize -> do
+        row <- state $ uniformR (1, mSize)
+        s <- state $ uniformR (1, mSize - 1)
+        return $ RowShift row s
+    ,\mSize -> do
+        col <- state $ uniformR (1, mSize)
+        s <- state $ uniformR (1, mSize - 1)
+        return $ ColShift col s
+    ,\mSize -> do
+        row <- state $ uniformR (1, mSize)
+        col <- state $ uniformR (1, mSize)
+        return $ SwapCase row col]
 
 difficulty :: Transform -> Float
 difficulty t = case t of
-    Rotate degree -> if degree == R180 then 1 else 2
+    Rotate degree     -> if degree == R180 then 1 else 2
     Reflect _         -> 1
     HorizontalShift _ -> 1
     VerticalShift _   -> 1
@@ -208,38 +201,54 @@ additionalDifficulty t ts =
           tDifficulty = Just $ difficulty t
 
 maxFail :: (Ord a) => Maybe a -> Maybe a -> Maybe a
-maxFail a b = max <$> a <*> b
+maxFail = liftA2 max
 
 minFail :: (Ord a) => Maybe a -> Maybe a -> Maybe a
-minFail a b = min <$> a <*> b
+minFail = liftA2 min
 
 conditionalDifficulty :: Transform -> Transform -> Maybe Float
 conditionalDifficulty newT oldT
-    | oldT == newT                            = Nothing
-    | hasOne  SwapCaseT                       = Just nd
-    | hasBoth RotateT ReflectT                = Nothing
-    | hasBoth RotateT HorizontalShiftT        = Just $ nd + 1.5
-    | hasBoth RotateT VerticalShiftT          = Just $ nd + 1.5
-    | hasOne  RotateT                         = Just $ nd + 2
-    | hasBoth ReflectT HorizontalShiftT       = Just $ nd + 1.5
-    | hasBoth ReflectT VerticalShiftT         = Just $ nd + 1.5
-    | hasOne  ReflectT                        = Just $ nd + 2
-    | hasBoth HorizontalShiftT VerticalShiftT = Just nd
-    | hasOne  HorizontalShiftT                = Just $ nd + 1
-    | hasOne  VerticalShiftT                  = Just $ nd + 1
-    | hasBoth RowShiftT ColShiftT             = Just $ nd + 1
-    | isCombinedShift oldT newT               = Just 0.1
-    | otherwise = Nothing
+    | oldT == newT             = Nothing
+    | shiftsOverlap oldT newT  = Nothing
+    | shiftsCoincide oldT newT = Just 0.1
+    | otherwise                = case (newT, oldT) of
+        (SwapCase{}, _)                      -> Just nd
+        (_, SwapCase{})                      -> Just nd
+        (Rotate{}, Reflect{})                -> Nothing
+        (Reflect{}, Rotate{})                -> Nothing
+        (Rotate{}, HorizontalShift{})        -> Just $ nd + 1.5
+        (HorizontalShift{}, Rotate{})        -> Just $ nd + 1.5
+        (Rotate{}, VerticalShift{})          -> Just $ nd + 1.5
+        (VerticalShift{}, Rotate{})          -> Just $ nd + 1.5
+        (Rotate{}, _)                        -> Just $ nd + 2
+        (_, Rotate{})                        -> Just $ nd + 2
+        (Reflect{}, HorizontalShift{})       -> Just $ nd + 1.5
+        (HorizontalShift{}, Reflect{})       -> Just $ nd + 1.5
+        (Reflect{}, VerticalShift{})         -> Just $ nd + 1.5
+        (VerticalShift{}, Reflect{})         -> Just $ nd + 1.5
+        (Reflect{}, _)                       -> Just $ nd + 2
+        (_, Reflect{})                       -> Just $ nd + 2
+        (HorizontalShift{}, VerticalShift{}) -> Just nd
+        (VerticalShift{}, HorizontalShift{}) -> Just nd
+        (HorizontalShift{}, _)               -> Just $ nd + 1
+        (_, HorizontalShift{})               -> Just $ nd + 1
+        (VerticalShift{}, _)                 -> Just $ nd + 1
+        (_, VerticalShift{})                 -> Just $ nd + 1
+        (RowShift{}, _)                      -> Just $ nd + 1
+        (_, RowShift{})                      -> Just $ nd + 1
+        (ColShift{}, _)                      -> Just $ nd + 1
     where
         nd = difficulty newT
-        cs = getType <$> [oldT, newT]
-        hasOne c = elem c cs
-        hasBoth t1 t2 = hasOne t1 && hasOne t2
-        isCombinedShift (RowShift r1 s1) (RowShift r2 s2) =
-            abs (r1 - r2) == 1 && s1 == s2
-        isCombinedShift (ColShift c1 s1) (ColShift c2 s2) =
-            abs (c1 - c2) == 1 && s1 == s2
-        isCombinedShift _ _ = False
+        shiftsOverlap t1 t2 = case (t1, t2) of
+            (HorizontalShift{}, HorizontalShift{}) -> True
+            (VerticalShift{}, VerticalShift{})     -> True
+            (RowShift r1 _, RowShift r2 _)         -> r1 == r2
+            (ColShift c1 _, ColShift c2 _)         -> c1 == c2
+            (_, _)                                 -> False
+        shiftsCoincide t1 t2 = case (t1, t2) of
+            (RowShift r1 s1, RowShift r2 s2) -> abs (r1 - r2) == 1 && s1 == s2
+            (ColShift c1 s1, ColShift c2 s2) -> abs (c1 - c2) == 1 && s1 == s2
+            (_, _)                           -> False
 
 selectRandom :: [a] -> State StdGen a
 selectRandom xs = do
