@@ -1,5 +1,4 @@
 import Data.List (transpose, intercalate, intersperse)
-import GHC.Parser.CharClass (is_upper)
 import Data.Char (toLower, toUpper, isUpper)
 import System.Random.Stateful (StdGen, uniformR, uniform, mkStdGen)
 import Data.Maybe (isNothing)
@@ -10,17 +9,6 @@ import Data.Time.Clock.System (getSystemTime, SystemTime (systemSeconds))
 import Control.Monad.Trans.State ( State, state, runState )
 import Control.Monad (replicateM)
 import Control.Applicative (Applicative(liftA2))
-
--- a) store type for difficulty
--- b) store data for difficulty and producing function
--- c) produce transform function
--- d) randomly select transform to generate
--- e) generate random instance of transform
-
--- type class, we need compiler to guarantee all cases have been covered, 
--- template haskell to generate prisms, prisms are not simple values
--- gadt, could help with identifying which, but still need to have enum shadow
--- first class patterns, could help with identifying which
 
 main :: IO ()
 main = do
@@ -172,15 +160,15 @@ getTransform t = case t of
     Rotate R90        -> rotate90
     Rotate R180       -> rotate180
     Rotate R270       -> rotate270
-    Reflect X         -> xreflect
-    Reflect Y         -> yreflect
-    Reflect XY        -> xyreflect
-    Reflect NXY       -> nxyreflect
-    HorizontalShift s -> hshift s
-    VerticalShift s   -> vshift s
-    RowShift row s    -> rshift row s
-    ColShift col s    -> cshift col s
-    SwapCase row col  -> swapcase' row col
+    Reflect X         -> xReflect
+    Reflect Y         -> yReflect
+    Reflect XY        -> xyReflect
+    Reflect NXY       -> nxyReflect
+    HorizontalShift s -> hShift s
+    VerticalShift s   -> vShift s
+    RowShift row s    -> rShift row s
+    ColShift col s    -> cShift col s
+    SwapCase row col  -> swapCase' row col
 
 cumulativeDifficulty :: [Transform] -> Maybe Float
 cumulativeDifficulty [] = Just 0
@@ -212,31 +200,35 @@ conditionalDifficulty newT oldT
     | shiftsOverlap oldT newT  = Nothing
     | shiftsCoincide oldT newT = Just 0.1
     | otherwise                = case (newT, oldT) of
-        (SwapCase{}, _)                      -> Just nd
-        (_, SwapCase{})                      -> Just nd
-        (Rotate{}, Reflect{})                -> Nothing
-        (Reflect{}, Rotate{})                -> Nothing
-        (Rotate{}, HorizontalShift{})        -> Just $ nd + 1.5
-        (HorizontalShift{}, Rotate{})        -> Just $ nd + 1.5
-        (Rotate{}, VerticalShift{})          -> Just $ nd + 1.5
-        (VerticalShift{}, Rotate{})          -> Just $ nd + 1.5
-        (Rotate{}, _)                        -> Just $ nd + 2
-        (_, Rotate{})                        -> Just $ nd + 2
-        (Reflect{}, HorizontalShift{})       -> Just $ nd + 1.5
-        (HorizontalShift{}, Reflect{})       -> Just $ nd + 1.5
-        (Reflect{}, VerticalShift{})         -> Just $ nd + 1.5
-        (VerticalShift{}, Reflect{})         -> Just $ nd + 1.5
-        (Reflect{}, _)                       -> Just $ nd + 2
-        (_, Reflect{})                       -> Just $ nd + 2
-        (HorizontalShift{}, VerticalShift{}) -> Just nd
-        (VerticalShift{}, HorizontalShift{}) -> Just nd
-        (HorizontalShift{}, _)               -> Just $ nd + 1
-        (_, HorizontalShift{})               -> Just $ nd + 1
-        (VerticalShift{}, _)                 -> Just $ nd + 1
-        (_, VerticalShift{})                 -> Just $ nd + 1
-        (RowShift{}, _)                      -> Just $ nd + 1
-        (_, RowShift{})                      -> Just $ nd + 1
-        (ColShift{}, _)                      -> Just $ nd + 1
+        (SwapCase{}, _)                        -> Just nd
+        (_, SwapCase{})                        -> Just nd
+        (Rotate{}, Rotate{})                   -> Nothing
+        (Rotate{}, Reflect{})                  -> Nothing
+        (Reflect{}, Rotate{})                  -> Nothing
+        (Rotate{}, HorizontalShift{})          -> Just $ nd + 1.5
+        (HorizontalShift{}, Rotate{})          -> Just $ nd + 1.5
+        (Rotate{}, VerticalShift{})            -> Just $ nd + 1.5
+        (VerticalShift{}, Rotate{})            -> Just $ nd + 1.5
+        (Rotate{}, _)                          -> Just $ nd + 2
+        (_, Rotate{})                          -> Just $ nd + 2
+        (Reflect{}, Reflect{})                 -> Nothing
+        (Reflect{}, HorizontalShift{})         -> Just $ nd + 1.5
+        (HorizontalShift{}, Reflect{})         -> Just $ nd + 1.5
+        (Reflect{}, VerticalShift{})           -> Just $ nd + 1.5
+        (VerticalShift{}, Reflect{})           -> Just $ nd + 1.5
+        (Reflect{}, _)                         -> Just $ nd + 2
+        (_, Reflect{})                         -> Just $ nd + 2
+        (HorizontalShift{}, HorizontalShift{}) -> Nothing
+        (HorizontalShift{}, VerticalShift{})   -> Just nd
+        (VerticalShift{}, HorizontalShift{})   -> Just nd
+        (HorizontalShift{}, _)                 -> Just $ nd + 1
+        (_, HorizontalShift{})                 -> Just $ nd + 1
+        (VerticalShift{}, VerticalShift{})     -> Nothing
+        (VerticalShift{}, _)                   -> Just $ nd + 1
+        (_, VerticalShift{})                   -> Just $ nd + 1
+        (RowShift{}, _)                        -> Just $ nd + 1
+        (_, RowShift{})                        -> Just $ nd + 1
+        (ColShift{}, _)                        -> Just $ nd + 1
     where
         nd = difficulty newT
         shiftsOverlap t1 t2 = case (t1, t2) of
@@ -277,68 +269,65 @@ randBool :: State StdGen Bool
 randBool = state uniform
 
 condSwap :: Char -> Bool -> Char
-condSwap c b = if b then swapcase c else c
+condSwap c b = if b then swapCase c else c
 
-swapcase :: Char -> Char
-swapcase c
+swapCase :: Char -> Char
+swapCase c
     | isUpper c = toLower c
     | otherwise = toUpper c
 
 shift :: Int -> [a] -> [a]
 shift n xs = drop n xs ++ take n xs
 
-posop :: Int -> (a -> a) -> [a] -> [a]
-posop p op as = start ++ rop nth ++ end
+elemOp :: Int -> (a -> a) -> [a] -> [a]
+elemOp p op as = start ++ rop nth ++ end
     where start = take (p-1) as
           nth = drop (p-1) (take p as)
           end = drop p as
           rop [] = []
           rop (x:xs) = op x : xs
 
-rowop :: Int -> (Row -> Row) -> Matrix -> Matrix
-rowop r op = ToM . posop r op . froM
+rowOp :: Int -> (Row -> Row) -> Matrix -> Matrix
+rowOp r op = ToM . elemOp r op . froM
 
-colop :: Int -> (Row -> Row) -> Matrix -> Matrix
-colop c op = nxyreflect . rowop c op . nxyreflect
+colOp :: Int -> (Row -> Row) -> Matrix -> Matrix
+colOp c op = nxyReflect . rowOp c op . nxyReflect
 
-cellop :: Int -> Int -> (Char -> Char) -> Matrix -> Matrix
-cellop r c op = rowop r (posop c op)
+cellOp :: Int -> Int -> (Char -> Char) -> Matrix -> Matrix
+cellOp r c op = rowOp r (elemOp c op)
 
-hshift :: Int -> Matrix -> Matrix
-hshift n = ToM . map (shift n) . froM
+hShift :: Int -> Matrix -> Matrix
+hShift n = ToM . map (shift n) . froM
 
-vshift :: Int -> Matrix -> Matrix
-vshift n = ToM . shift n . froM
+vShift :: Int -> Matrix -> Matrix
+vShift n = ToM . shift n . froM
 
-rshift :: Int -> Int -> Matrix -> Matrix
-rshift r s = rowop r (shift s)
+rShift :: Int -> Int -> Matrix -> Matrix
+rShift r s = rowOp r (shift s)
 
-cshift :: Int -> Int -> Matrix -> Matrix
-cshift c s = colop c (shift s)
+cShift :: Int -> Int -> Matrix -> Matrix
+cShift c s = colOp c (shift s)
 
-xreflect :: Matrix -> Matrix
-xreflect = ToM . reverse . froM
+xReflect :: Matrix -> Matrix
+xReflect = ToM . reverse . froM
 
-yreflect :: Matrix -> Matrix
-yreflect = ToM . map reverse . froM
+yReflect :: Matrix -> Matrix
+yReflect = ToM . map reverse . froM
 
-nxyreflect :: Matrix -> Matrix
-nxyreflect = ToM . transpose . froM
+nxyReflect :: Matrix -> Matrix
+nxyReflect = ToM . transpose . froM
 
-xyreflect :: Matrix -> Matrix
-xyreflect = xreflect . nxyreflect . xreflect
+xyReflect :: Matrix -> Matrix
+xyReflect = xReflect . nxyReflect . xReflect
 
 rotate180 :: Matrix -> Matrix
-rotate180 = xreflect . yreflect
+rotate180 = xReflect . yReflect
 
 rotate90 :: Matrix -> Matrix
-rotate90 = nxyreflect . xreflect
+rotate90 = nxyReflect . xReflect
 
 rotate270 :: Matrix -> Matrix
-rotate270 = xreflect . nxyreflect
+rotate270 = xReflect . nxyReflect
 
-swapcase' :: Int -> Int -> Matrix -> Matrix
-swapcase' r c = cellop r c swpcase
-    where swpcase ch
-              | is_upper ch = toLower ch
-              | otherwise = toUpper ch
+swapCase' :: Int -> Int -> Matrix -> Matrix
+swapCase' r c = cellOp r c swapCase
